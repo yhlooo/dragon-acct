@@ -6,6 +6,7 @@ import (
 
 // Assets 资产
 type Assets struct {
+	// 商品信息
 	Goods []GoodsInfo `json:"goods,omitempty" yaml:"goods,omitempty"`
 	// 交易记录
 	Transactions []Transaction `json:"transactions,omitempty" yaml:"transactions,omitempty"`
