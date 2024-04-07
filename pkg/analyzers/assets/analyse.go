@@ -14,14 +14,13 @@ func Analyse(_ context.Context, assets *v1.Assets) (*Report, error) {
 	// 统计所有产品持仓情况
 	allGoods := map[string]*Goods{}
 	for _, t := range assets.Transactions {
-		addToGoods(allGoods, t.From, true)
-		addToGoods(allGoods, t.To, false)
+		addToGoods(allGoods, t.From, true, t)
+		addToGoods(allGoods, t.To, false, t)
 	}
 
 	// 组装报告
-	report := &Report{
-		goodsInfos: assets.Goods,
-	}
+	report := &Report{}
+	report.AddGoodsInfo(assets.Goods...)
 	for _, g := range allGoods {
 		report.goods = append(report.goods, *g)
 	}
@@ -33,7 +32,7 @@ func Analyse(_ context.Context, assets *v1.Assets) (*Report, error) {
 }
 
 // addToGoods 添加商品交易记录
-func addToGoods(allGoods map[string]*Goods, goods *v1.Goods, minus bool) {
+func addToGoods(allGoods map[string]*Goods, goods *v1.Goods, minus bool, t v1.Transaction) {
 	if goods == nil {
 		return
 	}
@@ -50,4 +49,5 @@ func addToGoods(allGoods map[string]*Goods, goods *v1.Goods, minus bool) {
 	} else {
 		allGoods[key].Quantity = allGoods[key].Quantity.Add(goods.Quantity)
 	}
+	allGoods[key].transactions = append(allGoods[key].transactions, t)
 }

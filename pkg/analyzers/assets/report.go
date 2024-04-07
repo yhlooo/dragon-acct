@@ -1,21 +1,22 @@
 package assets
 
 import (
-	"fmt"
-	"io"
-	"slices"
 	"sort"
+	"time"
 
-	"github.com/olekukonko/tablewriter"
 	"github.com/shopspring/decimal"
 
 	v1 "github.com/yhlooo/dragon-acct/pkg/models/v1"
+	"github.com/yhlooo/dragon-acct/pkg/utils/rateofreturn"
 )
 
 // Report 报告
 type Report struct {
-	goodsInfos []v1.GoodsInfo
-	goods      []Goods
+	goodsInfos   map[string]v1.GoodsInfo
+	goodsIndexes map[string]int
+
+	//goodsInfos []v1.GoodsInfo
+	goods []Goods
 }
 
 // Goods 商品
@@ -36,24 +37,43 @@ type Goods struct {
 	Value decimal.Decimal `json:"value,omitempty" yaml:"value,omitempty"`
 	// 占比
 	Ratio decimal.Decimal `json:"ratio,omitempty" yaml:"ratio,omitempty"`
-	// TODO: 收益、收益率
-	SortIndex uint64
+	// 损益
+	ProfitAndLoss decimal.Decimal `json:"profitAndLoss,omitempty" yaml:"profitAndLoss,omitempty"`
+	// 收益率
+	RateOfReturn decimal.Decimal `json:"rateOfReturn,omitempty" yaml:"rateOfReturn,omitempty"`
+	// 年化收益率
+	AnnualizedRateOfReturn decimal.Decimal `json:"annualizedRateOfReturn,omitempty" yaml:"annualizedRateOfReturn,omitempty"`
+
+	// 关于该产品的交易
+	transactions []v1.Transaction
+}
+
+// AddGoodsInfo 添加商品信息
+func (r *Report) AddGoodsInfo(goodsInfos ...v1.GoodsInfo) {
+	if len(goodsInfos) == 0 {
+		return
+	}
+
+	if r.goodsInfos == nil {
+		r.goodsInfos = map[string]v1.GoodsInfo{}
+	}
+	if r.goodsIndexes == nil {
+		r.goodsIndexes = map[string]int{}
+	}
+
+	curIndex := len(r.goodsIndexes)
+	for i, info := range goodsInfos {
+		r.goodsInfos[info.Name] = info
+		r.goodsIndexes[info.Name] = curIndex + i
+	}
 }
 
 // Complete 补充完成
 func (r *Report) Complete() {
-	// 产品详细信息的索引
-	goodsInfos := map[string]v1.GoodsInfo{}
-	goodsIndexes := map[string]int{}
-	for i, info := range r.goodsInfos {
-		goodsInfos[info.Name] = info
-		goodsIndexes[info.Name] = i
-	}
-
 	totalValue := decimal.Zero
 	for i, g := range r.goods {
 		// 补充产品信息
-		info, ok := goodsInfos[g.Name]
+		info, ok := r.goodsInfos[g.Name]
 		if ok {
 			r.goods[i].Code = info.Code
 			r.goods[i].Price = info.Price
@@ -62,9 +82,11 @@ func (r *Report) Complete() {
 		// 补充总价
 		r.goods[i].Value = g.Quantity.Mul(r.goods[i].Price)
 		totalValue = totalValue.Add(r.goods[i].Value)
+		// 补充损益情况
+		r.completeGoodsProfitAndLoss(&r.goods[i])
 	}
 
-	if totalValue.Cmp(decimal.Zero) != 0 {
+	if !totalValue.IsZero() {
 		for i, g := range r.goods {
 			// 补充占比
 			r.goods[i].Ratio = g.Value.Div(totalValue)
@@ -72,13 +94,63 @@ func (r *Report) Complete() {
 	}
 
 	// 排序
+	r.sortGoods()
+}
+
+// completeGoodsProfitAndLoss 补充损益情况
+func (r *Report) completeGoodsProfitAndLoss(goods *Goods) {
+	var cashFlow []rateofreturn.CashFlowRecord
+	totalCost := decimal.Zero
+	totalReturn := decimal.Zero
+
+	for _, t := range goods.transactions {
+		switch {
+		case t.To == nil || t.From == nil:
+			continue
+		case t.To.Name == goods.Name:
+			price := decimal.New(1, 0)
+			if info, ok := r.goodsInfos[t.From.Name]; ok {
+				price = info.Price
+			}
+			cashFlow = append(cashFlow, rateofreturn.CashFlowRecord{
+				Date:   t.Date.Time,
+				Amount: t.From.Quantity.Mul(price).Neg(),
+			})
+			totalCost = totalCost.Add(t.From.Quantity.Mul(price))
+		case t.From.Name == goods.Name:
+			price := decimal.New(1, 0)
+			if info, ok := r.goodsInfos[t.To.Name]; ok {
+				price = info.Price
+			}
+			cashFlow = append(cashFlow, rateofreturn.CashFlowRecord{
+				Date:   t.Date.Time,
+				Amount: t.To.Quantity.Mul(price),
+			})
+			totalReturn = totalReturn.Add(t.To.Quantity.Mul(price))
+		}
+	}
+	if !goods.Value.IsZero() {
+		cashFlow = append(cashFlow, rateofreturn.CashFlowRecord{
+			Date:   time.Now().Round(24 * time.Hour),
+			Amount: goods.Value,
+		})
+		totalReturn = totalReturn.Add(goods.Value)
+	}
+
+	goods.ProfitAndLoss = totalReturn.Sub(totalCost)
+	goods.RateOfReturn = totalReturn.Sub(totalCost).DivRound(totalCost, 6)
+	goods.AnnualizedRateOfReturn = rateofreturn.XIRR(cashFlow)
+}
+
+// sortGoods 对产品进行排序
+func (r *Report) sortGoods() {
 	sort.Slice(r.goods, func(i, j int) bool {
 		aName := r.goods[i].Name
 		bName := r.goods[j].Name
 
 		// 比较在商品信息列表中的位置
-		aIndex, aIndexOK := goodsIndexes[aName]
-		bIndex, bIndexOK := goodsIndexes[bName]
+		aIndex, aIndexOK := r.goodsIndexes[aName]
+		bIndex, bIndexOK := r.goodsIndexes[bName]
 		switch {
 		case aIndexOK && !bIndexOK:
 			return true
@@ -89,7 +161,7 @@ func (r *Report) Complete() {
 		}
 
 		// 比较持仓
-		return r.goods[i].Value.Cmp(r.goods[j].Value) > 0
+		return r.goods[j].Value.LessThan(r.goods[i].Value)
 	})
 }
 
@@ -107,7 +179,7 @@ func (r *Report) AllGoods() []Goods {
 func (r *Report) HoldingGoods() []Goods {
 	var ret []Goods
 	for _, g := range r.goods {
-		if g.Value.Cmp(decimal.Zero) == 0 {
+		if g.Value.IsZero() {
 			continue
 		}
 		ret = append(ret, g)
@@ -121,7 +193,7 @@ func (r *Report) Risks() []Goods {
 	risks := map[v1.RiskLevel]decimal.Decimal{}
 	totalValue := decimal.Zero
 	for _, g := range r.goods {
-		if g.Value.Cmp(decimal.Zero) == 0 {
+		if g.Value.IsZero() {
 			continue
 		}
 		risk := g.Risk
@@ -136,7 +208,7 @@ func (r *Report) Risks() []Goods {
 	var ret []Goods
 	for r, v := range risks {
 		ratio := decimal.Zero
-		if totalValue.Cmp(decimal.Zero) != 0 {
+		if !totalValue.IsZero() {
 			ratio = v.Div(totalValue)
 		}
 		ret = append(ret, Goods{
@@ -150,162 +222,4 @@ func (r *Report) Risks() []Goods {
 		return ret[i].Risk < ret[j].Risk
 	})
 	return ret
-}
-
-// Text 输出文本形式的报告
-func (r *Report) Text(w io.Writer) error {
-	r.textAllGoods(w)
-	r.textHoldingGoods(w)
-	r.textRisks(w)
-	r.textCustodians(w)
-
-	return nil
-}
-
-// textAllGoods 输出文本形式的关于所有产品的报告
-func (r *Report) textAllGoods(w io.Writer) {
-	table := tablewriter.NewWriter(w)
-	table.SetHeader([]string{"Name", "Custodian", "Code", "Risk", "Price", "Quantity", "Value"})
-	table.SetColumnAlignment([]int{
-		tablewriter.ALIGN_LEFT,
-		tablewriter.ALIGN_LEFT,
-		tablewriter.ALIGN_LEFT,
-		tablewriter.ALIGN_LEFT,
-		tablewriter.ALIGN_RIGHT,
-		tablewriter.ALIGN_RIGHT,
-		tablewriter.ALIGN_RIGHT,
-	})
-	for _, g := range r.AllGoods() {
-		table.Append([]string{
-			g.Name,
-			g.Custodian,
-			g.Code,
-			string(g.Risk),
-			g.Price.StringFixedBank(2),
-			g.Quantity.StringFixedBank(2),
-			g.Value.StringFixedBank(2),
-		})
-	}
-
-	_, _ = fmt.Fprintln(w, "All Goods:")
-	table.Render()
-	_, _ = fmt.Fprintln(w)
-}
-
-// textHoldingGoods 输出文本形式的关于持仓分布的报告
-func (r *Report) textHoldingGoods(w io.Writer) {
-	table := tablewriter.NewWriter(w)
-	table.SetHeader([]string{"Name", "Custodian", "Value", "Ratio"})
-	table.SetColumnAlignment([]int{
-		tablewriter.ALIGN_LEFT,
-		tablewriter.ALIGN_LEFT,
-		tablewriter.ALIGN_RIGHT,
-		tablewriter.ALIGN_RIGHT,
-	})
-	for _, g := range r.HoldingGoods() {
-		table.Append([]string{
-			g.Name,
-			g.Custodian,
-			g.Value.StringFixedBank(2),
-			g.Ratio.Shift(2).StringFixedBank(2) + "%",
-		})
-	}
-
-	_, _ = fmt.Fprintln(w, "Holding:")
-	table.Render()
-	_, _ = fmt.Fprintln(w)
-}
-
-// textRisks 输出文本形式的关于风险分布的报告
-func (r *Report) textRisks(w io.Writer) {
-	table := tablewriter.NewWriter(w)
-	table.SetHeader([]string{"Risk", "Value", "Ratio"})
-	table.SetColumnAlignment([]int{
-		tablewriter.ALIGN_LEFT,
-		tablewriter.ALIGN_RIGHT,
-		tablewriter.ALIGN_RIGHT,
-	})
-	for _, g := range r.Risks() {
-		table.Append([]string{
-			string(g.Risk),
-			g.Value.StringFixedBank(2),
-			g.Ratio.Shift(2).StringFixedBank(2) + "%",
-		})
-	}
-
-	_, _ = fmt.Fprintln(w, "Risks:")
-	table.Render()
-	_, _ = fmt.Fprintln(w)
-}
-
-// textCustodians 输出文本形式的关于托管机构分布的报告
-func (r *Report) textCustodians(w io.Writer) {
-	// 关键商品
-	var pinned []string
-	for _, info := range r.goodsInfos {
-		if !info.Pinned {
-			continue
-		}
-		pinned = append(pinned, info.Name)
-	}
-
-	// 按托管机构分组统计资产总价
-	var custodians []string
-	groupByCustodian := map[string]map[string]decimal.Decimal{}
-	for _, g := range r.HoldingGoods() {
-		name := g.Name
-		if !slices.Contains(pinned, name) {
-			name = "others"
-		}
-		if groupByCustodian[g.Custodian] == nil {
-			groupByCustodian[g.Custodian] = map[string]decimal.Decimal{}
-			custodians = append(custodians, g.Custodian)
-		}
-		groupByCustodian[g.Custodian][name] = groupByCustodian[g.Custodian][name].Add(g.Value)
-		groupByCustodian[g.Custodian]["total"] = groupByCustodian[g.Custodian]["total"].Add(g.Value)
-	}
-	sort.Slice(custodians, func(i, j int) bool {
-		return groupByCustodian[custodians[i]]["total"].Cmp(groupByCustodian[custodians[j]]["total"]) > 0
-	})
-
-	// 组装表格
-	columnAlignment := []int{tablewriter.ALIGN_LEFT}
-	header := []string{"Custodian"}
-	var data [][]string
-	for i, custodian := range custodians {
-		goods := groupByCustodian[custodian]
-		line := []string{custodian}
-
-		for _, name := range pinned {
-			line = append(line, goods[name].StringFixedBank(2))
-			if i == 0 {
-				header = append(header, name)
-				columnAlignment = append(columnAlignment, tablewriter.ALIGN_RIGHT)
-			}
-		}
-
-		line = append(line, goods["others"].StringFixedBank(2))
-		if i == 0 {
-			header = append(header, "Others")
-			columnAlignment = append(columnAlignment, tablewriter.ALIGN_RIGHT)
-		}
-
-		if len(pinned) != 0 {
-			line = append(line, goods["total"].StringFixedBank(2))
-			if i == 0 {
-				header = append(header, "Total")
-				columnAlignment = append(columnAlignment, tablewriter.ALIGN_RIGHT)
-			}
-		}
-
-		data = append(data, line)
-	}
-	table := tablewriter.NewWriter(w)
-	table.SetHeader(header)
-	table.SetColumnAlignment(columnAlignment)
-	table.AppendBulk(data)
-
-	_, _ = fmt.Fprintln(w, "Custodians:")
-	table.Render()
-	_, _ = fmt.Fprintln(w)
 }
