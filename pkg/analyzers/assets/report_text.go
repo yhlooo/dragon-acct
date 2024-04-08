@@ -66,6 +66,8 @@ func (r *Report) textHoldingGoods(w io.Writer) {
 		tablewriter.ALIGN_RIGHT,
 		tablewriter.ALIGN_RIGHT,
 	})
+	total := decimal.Zero
+	totalRatio := decimal.Zero
 	for _, g := range r.HoldingGoods() {
 		table.Append([]string{
 			g.Name,
@@ -73,7 +75,10 @@ func (r *Report) textHoldingGoods(w io.Writer) {
 			g.Value.StringFixedBank(2),
 			g.Ratio.Shift(2).StringFixedBank(2) + "%",
 		})
+		total = total.Add(g.Value)
+		totalRatio = totalRatio.Add(g.Ratio)
 	}
+	table.SetFooter([]string{"", "Total", total.StringFixedBank(2), totalRatio.Shift(2).StringFixedBank(2) + "%"})
 
 	_, _ = fmt.Fprintln(w, "Holding:")
 	table.Render()
