@@ -107,7 +107,7 @@ func (r *Report) textCustodians(w io.Writer) {
 	// 关键商品
 	var pinned []string
 	for _, info := range r.goodsInfos {
-		if !info.Pinned {
+		if !info.Base {
 			continue
 		}
 		pinned = append(pinned, info.Name)

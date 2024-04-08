@@ -136,7 +136,7 @@ func loadCSVToAssetsGoods(r *csv.Reader, into *[]v1.GoodsInfo) error {
 		if err != nil {
 			return fmt.Errorf("parse Price %q at line %d error: %w", row[3], i+2, err)
 		}
-		ret[i].Pinned = strings.ToLower(row[4]) == "true"
+		ret[i].Base = strings.ToLower(row[4]) == "true"
 	}
 	*into = ret
 	return nil

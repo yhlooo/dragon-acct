@@ -46,8 +46,8 @@ type GoodsInfo struct {
 	Risk RiskLevel `json:"risk,omitempty" yaml:"risk,omitempty"`
 	// 单价
 	Price decimal.Decimal `json:"price" yaml:"price"`
-	// 图钉钉住
-	Pinned bool `json:"pinned,omitempty" yaml:"pin,omitempty"`
+	// 基础商品（货币）
+	Base bool `json:"base,omitempty" yaml:"base,omitempty"`
 }
 
 // RiskLevel 风险级别

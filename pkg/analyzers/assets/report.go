@@ -74,16 +74,20 @@ func (r *Report) Complete() {
 	for i, g := range r.goods {
 		// 补充产品信息
 		info, ok := r.goodsInfos[g.Name]
+		isBase := false
 		if ok {
 			r.goods[i].Code = info.Code
 			r.goods[i].Price = info.Price
 			r.goods[i].Risk = info.Risk
+			isBase = info.Base
 		}
 		// 补充总价
 		r.goods[i].Value = g.Quantity.Mul(r.goods[i].Price)
 		totalValue = totalValue.Add(r.goods[i].Value)
 		// 补充损益情况
-		r.completeGoodsProfitAndLoss(&r.goods[i])
+		if !isBase {
+			r.completeGoodsProfitAndLoss(&r.goods[i])
+		}
 	}
 
 	if !totalValue.IsZero() {
