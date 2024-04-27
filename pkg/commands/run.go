@@ -66,7 +66,9 @@ func NewRunCommandWithOptions(opts *options.RunOptions) *cobra.Command {
 							return fmt.Errorf("open output file %q error: %w", opts.Output, err)
 						}
 					}
-					return r.Text(w)
+					if err := r.Text(w); err != nil {
+						return err
+					}
 				default:
 					return fmt.Errorf("unsupported output format: %q", opts.Format)
 				}
