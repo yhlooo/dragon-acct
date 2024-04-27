@@ -10,6 +10,12 @@ import (
 // Merge 将 data 合并到 root
 func Merge(root *v1.Root, data interface{}) error {
 	switch d := data.(type) {
+	case *v1.Income:
+		return mergeIncome(root, d)
+	case *[]v1.IncomeItem:
+		return mergeIncomeDetails(root, *d)
+	case []v1.IncomeItem:
+		return mergeIncomeDetails(root, d)
 	case *v1.Assets:
 		return mergeAssets(root, d)
 	case *[]v1.GoodsInfo:
@@ -23,6 +29,25 @@ func Merge(root *v1.Root, data interface{}) error {
 	default:
 		return fmt.Errorf("can not merge %T to *v1.Root", data)
 	}
+}
+
+// mergeIncome 将 data 合并到 root.Income
+func mergeIncome(root *v1.Root, data *v1.Income) error {
+	if err := mergeIncomeDetails(root, data.Details); err != nil {
+		return err
+	}
+	return nil
+}
+
+// mergeIncomeDetails 将 data 合并到 root.Income.Details
+func mergeIncomeDetails(root *v1.Root, data []v1.IncomeItem) error {
+	// 追加
+	root.Income.Details = append(root.Income.Details, data...)
+	// 排序
+	sort.Slice(root.Income.Details, func(i, j int) bool {
+		return root.Income.Details[i].Date.Before(root.Income.Details[j].Date.Time)
+	})
+	return nil
 }
 
 // mergeAssets 将 data 合并到 root.Assets

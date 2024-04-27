@@ -18,6 +18,8 @@ const (
 	assetsName         = "assets"
 	assetsGoods        = "assets_goods"
 	assetsTransactions = "assets_transactions"
+	incomeName         = "income"
+	incomeDetailsName  = "income_details"
 )
 
 // Collect 收集数据
@@ -36,6 +38,18 @@ func Collect(path string) (*v1.Root, error) {
 		filePath := filepath.Join(path, f.Name())
 		var err error
 		switch {
+		case strings.HasPrefix(f.Name(), incomeDetailsName):
+			switch ext {
+			case ".yaml", ".yml":
+				err = loadYAML(ret, filePath, &[]v1.IncomeItem{})
+			case ".csv":
+				err = loadCSV(ret, filePath, &[]v1.IncomeItem{})
+			}
+		case strings.HasPrefix(f.Name(), incomeName):
+			switch ext {
+			case ".yaml", ".yml":
+				err = loadYAML(ret, filePath, &v1.Income{})
+			}
 		case strings.HasPrefix(f.Name(), assetsTransactions):
 			switch ext {
 			case ".yaml", ".yml":
@@ -95,6 +109,8 @@ func loadCSV(root *v1.Root, path string, into interface{}) error {
 
 	// 加载到 CSV
 	switch obj := into.(type) {
+	case *[]v1.IncomeItem:
+		err = loadCSVToIncomeDetails(r, obj)
 	case *[]v1.GoodsInfo:
 		err = loadCSVToAssetsGoods(r, obj)
 	case *[]v1.Transaction:
@@ -103,7 +119,7 @@ func loadCSV(root *v1.Root, path string, into interface{}) error {
 		return fmt.Errorf("can not load csv to %T", into)
 	}
 	if err != nil {
-		return fmt.Errorf("load csv to %T error", into)
+		return fmt.Errorf("load csv to %T error: %w", into, err)
 	}
 
 	// 合并数据
@@ -111,6 +127,67 @@ func loadCSV(root *v1.Root, path string, into interface{}) error {
 		return fmt.Errorf("merge file %q error: %w", path, err)
 	}
 	return nil
+}
+
+// loadCSVToIncomeDetails 加载 CSV 到 []v1.IncomeItem
+func loadCSVToIncomeDetails(r *csv.Reader, into *[]v1.IncomeItem) error {
+	rows, err := r.ReadAll()
+	if err != nil {
+		return fmt.Errorf("read csv error: %w", err)
+	}
+	if len(rows) < 2 {
+		return nil
+	}
+
+	ret := make([]v1.IncomeItem, len(rows)-1)
+	for i, row := range rows[1:] {
+		if len(row) != 7 {
+			return fmt.Errorf("the number of columns is not as expected: %d (expected: 7)", len(row))
+		}
+
+		d, err := time.Parse(time.DateOnly, row[0])
+		if err != nil {
+			return fmt.Errorf("parse Date %q at line %d error: %w", row[0], i+2, err)
+		}
+		ret[i].Date = v1.Date{Time: d}
+
+		ret[i].Gross, err = decimal.NewFromString(row[1])
+		if err != nil {
+			return fmt.Errorf("parse Gross %q at line %d error: %w", row[1], i+2, err)
+		}
+
+		ret[i].InsuranceAndHF, err = decimal.NewFromString(row[2])
+		if err != nil {
+			return fmt.Errorf("parse InsuranceAndHF %q at line %d error: %w", row[2], i+2, err)
+		}
+
+		ret[i].Tax, err = decimal.NewFromString(row[3])
+		if err != nil {
+			return fmt.Errorf("parse Tax %q at line %d error: %w", row[3], i+2, err)
+		}
+
+		ret[i].ConsumptionProportion, err = decimal.NewFromString(row[4])
+		if err != nil {
+			return fmt.Errorf("parse ConsumptionProportion %q at line %d error: %w", row[4], i+2, err)
+		}
+
+		if row[5] != "" {
+			tags := map[string]string{}
+			for _, item := range strings.Split(row[5], " ") {
+				divided := strings.Split(item, ":")
+				if len(divided) != 2 {
+					continue
+				}
+				tags[divided[0]] = divided[1]
+			}
+			ret[i].Tags = tags
+		}
+		ret[i].Comment = row[6]
+	}
+	*into = ret
+
+	return nil
+
 }
 
 // loadCSVToAssetsGoods 加载 CSV 到 []v1.GoodsInfo

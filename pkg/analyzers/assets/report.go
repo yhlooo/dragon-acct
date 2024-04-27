@@ -7,10 +7,11 @@ import (
 	"github.com/shopspring/decimal"
 
 	v1 "github.com/yhlooo/dragon-acct/pkg/models/v1"
+	"github.com/yhlooo/dragon-acct/pkg/report"
 	"github.com/yhlooo/dragon-acct/pkg/utils/rateofreturn"
 )
 
-// Report 报告
+// Report 资产报告
 type Report struct {
 	goodsInfos   map[string]v1.GoodsInfo
 	goodsIndexes map[string]int
@@ -18,6 +19,8 @@ type Report struct {
 	//goodsInfos []v1.GoodsInfo
 	goods []Goods
 }
+
+var _ report.Report = &Report{}
 
 // Goods 商品
 type Goods struct {

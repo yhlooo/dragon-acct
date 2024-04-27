@@ -7,10 +7,11 @@ import (
 	"github.com/shopspring/decimal"
 
 	v1 "github.com/yhlooo/dragon-acct/pkg/models/v1"
+	"github.com/yhlooo/dragon-acct/pkg/report"
 )
 
-// Analyse 分析
-func Analyse(_ context.Context, assets *v1.Assets) (*Report, error) {
+// Analyse 分析资产数据
+func Analyse(_ context.Context, assets *v1.Assets) (report.Report, error) {
 	// 统计所有产品持仓情况
 	allGoods := map[string]*Goods{}
 	for _, t := range assets.Transactions {
@@ -19,16 +20,16 @@ func Analyse(_ context.Context, assets *v1.Assets) (*Report, error) {
 	}
 
 	// 组装报告
-	report := &Report{}
-	report.AddGoodsInfo(assets.Goods...)
+	r := &Report{}
+	r.AddGoodsInfo(assets.Goods...)
 	for _, g := range allGoods {
-		report.goods = append(report.goods, *g)
+		r.goods = append(r.goods, *g)
 	}
 
 	// 补充完成
-	report.Complete()
+	r.Complete()
 
-	return report, nil
+	return r, nil
 }
 
 // addToGoods 添加商品交易记录
