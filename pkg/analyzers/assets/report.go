@@ -13,6 +13,8 @@ import (
 
 // Report 资产报告
 type Report struct {
+	showHistory bool
+
 	goodsInfos   map[string]v1.GoodsInfo
 	goodsIndexes map[string]int
 

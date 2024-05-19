@@ -10,8 +10,13 @@ import (
 	"github.com/yhlooo/dragon-acct/pkg/report"
 )
 
+// Options 分析选项
+type Options struct {
+	ShowHistory bool
+}
+
 // Analyse 分析资产数据
-func Analyse(_ context.Context, assets *v1.Assets) (report.Report, error) {
+func Analyse(_ context.Context, assets *v1.Assets, opts Options) (report.Report, error) {
 	// 统计所有产品持仓情况
 	allGoods := map[string]*Goods{}
 	for _, t := range assets.Transactions {
@@ -20,7 +25,9 @@ func Analyse(_ context.Context, assets *v1.Assets) (report.Report, error) {
 	}
 
 	// 组装报告
-	r := &Report{}
+	r := &Report{
+		showHistory: opts.ShowHistory,
+	}
 	r.AddGoodsInfo(assets.Goods...)
 	for _, g := range allGoods {
 		r.goods = append(r.goods, *g)

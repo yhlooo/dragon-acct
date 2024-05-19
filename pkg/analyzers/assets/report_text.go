@@ -37,6 +37,9 @@ func (r *Report) textAllGoods(w io.Writer) {
 		tablewriter.ALIGN_RIGHT,
 	})
 	for _, g := range r.AllGoods() {
+		if g.Quantity.IsZero() && !r.showHistory {
+			continue
+		}
 		table.Append([]string{
 			g.Name,
 			g.Custodian,

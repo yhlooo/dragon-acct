@@ -48,7 +48,9 @@ func NewRunCommandWithOptions(opts *options.RunOptions) *cobra.Command {
 				case "income":
 					r, err = analyzerincome.Analyse(ctx, &data.Income)
 				case "assets":
-					r, err = analyzersassets.Analyse(ctx, &data.Assets)
+					r, err = analyzersassets.Analyse(ctx, &data.Assets, analyzersassets.Options{
+						ShowHistory: opts.ShowHistory,
+					})
 				default:
 					return fmt.Errorf("unsupported target: %q", target)
 				}
