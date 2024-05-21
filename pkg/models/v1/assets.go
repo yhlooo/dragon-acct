@@ -48,6 +48,8 @@ type GoodsInfo struct {
 	Price decimal.Decimal `json:"price" yaml:"price"`
 	// 基础商品（货币）
 	Base bool `json:"base,omitempty" yaml:"base,omitempty"`
+	// IgnoreReturn 忽略收益
+	IgnoreReturn bool `json:"ignoreReturn,omitempty" yaml:"ignoreReturn,omitempty"`
 }
 
 // RiskLevel 风险级别

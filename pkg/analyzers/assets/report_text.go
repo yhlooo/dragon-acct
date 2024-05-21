@@ -16,6 +16,7 @@ func (r *Report) Text(w io.Writer) error {
 	r.textHoldingGoods(w)
 	r.textRisks(w)
 	r.textCustodians(w)
+	r.testTotalProfitAndLoss(w)
 
 	return nil
 }
@@ -178,6 +179,27 @@ func (r *Report) textCustodians(w io.Writer) {
 	table.AppendBulk(data)
 
 	_, _ = fmt.Fprintln(w, "Custodians:")
+	table.Render()
+	_, _ = fmt.Fprintln(w)
+}
+
+// testTotalProfitAndLoss 输出文本形式的关于总体损益情况的报告
+func (r *Report) testTotalProfitAndLoss(w io.Writer) {
+	table := tablewriter.NewWriter(w)
+	table.SetHeader([]string{"P/L", "RR", "XIRR"})
+	table.SetColumnAlignment([]int{
+		tablewriter.ALIGN_RIGHT,
+		tablewriter.ALIGN_RIGHT,
+		tablewriter.ALIGN_RIGHT,
+	})
+	profitAndLoss, rateOfReturn, annualizedRateOfReturn := r.TotalProfitAndLoss()
+	table.Append([]string{
+		profitAndLoss.StringFixedBank(2),
+		rateOfReturn.Mul(decimal.New(100, 0)).StringFixedBank(2) + "%",
+		annualizedRateOfReturn.Mul(decimal.New(100, 0)).StringFixedBank(2) + "%",
+	})
+
+	_, _ = fmt.Fprintln(w, "Total P/L:")
 	table.Render()
 	_, _ = fmt.Fprintln(w)
 }

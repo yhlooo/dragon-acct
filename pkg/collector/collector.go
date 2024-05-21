@@ -213,7 +213,14 @@ func loadCSVToAssetsGoods(r *csv.Reader, into *[]v1.GoodsInfo) error {
 		if err != nil {
 			return fmt.Errorf("parse Price %q at line %d error: %w", row[3], i+2, err)
 		}
-		ret[i].Base = strings.ToLower(row[4]) == "true"
+		for _, key := range strings.Split(row[4], " ") {
+			switch key {
+			case "Base":
+				ret[i].Base = true
+			case "IgnoreReturn":
+				ret[i].IgnoreReturn = true
+			}
+		}
 	}
 	*into = ret
 	return nil

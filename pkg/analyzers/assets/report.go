@@ -18,8 +18,10 @@ type Report struct {
 	goodsInfos   map[string]v1.GoodsInfo
 	goodsIndexes map[string]int
 
-	//goodsInfos []v1.GoodsInfo
-	goods []Goods
+	goods                  []Goods
+	profitAndLoss          decimal.Decimal
+	rateOfReturn           decimal.Decimal
+	annualizedRateOfReturn decimal.Decimal
 }
 
 var _ report.Report = &Report{}
@@ -91,9 +93,13 @@ func (r *Report) Complete() {
 		totalValue = totalValue.Add(r.goods[i].Value)
 		// 补充损益情况
 		if !isBase {
-			r.completeGoodsProfitAndLoss(&r.goods[i])
+			totalCost, totalReturn, cashFlow := r.parseGoodsProfitAndLoss(&r.goods[i])
+			r.goods[i].ProfitAndLoss = totalReturn.Sub(totalCost)
+			r.goods[i].RateOfReturn = totalReturn.Sub(totalCost).DivRound(totalCost, 6)
+			r.goods[i].AnnualizedRateOfReturn = rateofreturn.XIRR(cashFlow)
 		}
 	}
+	r.completeTotalProfitAndLoss()
 
 	if !totalValue.IsZero() {
 		for i, g := range r.goods {
@@ -106,12 +112,31 @@ func (r *Report) Complete() {
 	r.sortGoods()
 }
 
-// completeGoodsProfitAndLoss 补充损益情况
-func (r *Report) completeGoodsProfitAndLoss(goods *Goods) {
+// completeTotalProfitAndLoss 补充总体损益情况
+func (r *Report) completeTotalProfitAndLoss() {
 	var cashFlow []rateofreturn.CashFlowRecord
 	totalCost := decimal.Zero
 	totalReturn := decimal.Zero
 
+	for _, goods := range r.goods {
+		if r.goodsInfos[goods.Name].IgnoreReturn || r.goodsInfos[goods.Name].Base {
+			continue
+		}
+		goodsCost, goodsReturn, goodsCashFlow := r.parseGoodsProfitAndLoss(&goods)
+		totalCost = totalCost.Add(goodsCost)
+		totalReturn = totalReturn.Add(goodsReturn)
+		cashFlow = append(cashFlow, goodsCashFlow...)
+	}
+
+	r.profitAndLoss = totalReturn.Sub(totalCost)
+	r.rateOfReturn = totalReturn.Sub(totalCost).DivRound(totalCost, 6)
+	r.annualizedRateOfReturn = rateofreturn.XIRR(cashFlow)
+}
+
+func (r *Report) parseGoodsProfitAndLoss(goods *Goods) (
+	totalCost, totalReturn decimal.Decimal,
+	cashFlow []rateofreturn.CashFlowRecord,
+) {
 	for _, t := range goods.transactions {
 		switch {
 		case t.To == nil || t.From == nil:
@@ -145,10 +170,7 @@ func (r *Report) completeGoodsProfitAndLoss(goods *Goods) {
 		})
 		totalReturn = totalReturn.Add(goods.Value)
 	}
-
-	goods.ProfitAndLoss = totalReturn.Sub(totalCost)
-	goods.RateOfReturn = totalReturn.Sub(totalCost).DivRound(totalCost, 6)
-	goods.AnnualizedRateOfReturn = rateofreturn.XIRR(cashFlow)
+	return
 }
 
 // sortGoods 对产品进行排序
@@ -231,4 +253,9 @@ func (r *Report) Risks() []Goods {
 		return ret[i].Risk < ret[j].Risk
 	})
 	return ret
+}
+
+// TotalProfitAndLoss 返回总体损益情况
+func (r *Report) TotalProfitAndLoss() (profitAndLoss, rateOfReturn, annualizedRateOfReturn decimal.Decimal) {
+	return r.profitAndLoss, r.rateOfReturn, r.annualizedRateOfReturn
 }
