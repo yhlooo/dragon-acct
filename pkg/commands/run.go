@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 
 	analyzersassets "github.com/yhlooo/dragon-acct/pkg/analyzers/assets"
@@ -62,13 +63,18 @@ func NewRunCommandWithOptions(opts *options.RunOptions) *cobra.Command {
 				switch opts.Format {
 				case "text":
 					w := os.Stdout
+					withColor := !opts.NoColor
+					if withColor {
+						withColor = isatty.IsTerminal(os.Stdout.Fd())
+					}
 					if opts.Output != "" {
 						w, err = os.OpenFile(opts.Output, os.O_WRONLY|os.O_CREATE, 0o644)
 						if err != nil {
 							return fmt.Errorf("open output file %q error: %w", opts.Output, err)
 						}
+						withColor = false
 					}
-					if err := r.Text(w); err != nil {
+					if err := r.Text(w, report.TextOptions{WithColor: withColor}); err != nil {
 						return err
 					}
 				default:

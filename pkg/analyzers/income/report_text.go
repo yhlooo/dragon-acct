@@ -8,10 +8,12 @@ import (
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/shopspring/decimal"
+
+	"github.com/yhlooo/dragon-acct/pkg/report"
 )
 
 // Text 输出文本形式的报告
-func (r *Report) Text(w io.Writer) error {
+func (r *Report) Text(w io.Writer, _ report.TextOptions) error {
 	r.textDetails(w)
 	r.textGroupByTags(w)
 

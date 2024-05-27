@@ -23,6 +23,8 @@ type RunOptions struct {
 	Output string `json:"output,omitempty" yaml:"output,omitempty"`
 	// 输出格式
 	Format string `json:"format,omitempty" yaml:"format,omitempty"`
+	// 输出不含颜色相关的 ANSI 控制字符
+	NoColor bool `json:"noColor,omitempty" yaml:"noColor,omitempty"`
 }
 
 // Validate 校验选项是否合法
@@ -43,4 +45,5 @@ func (o *RunOptions) AddPFlags(flags *pflag.FlagSet) {
 		&o.Format, "format", "f", o.Format,
 		`Output format of the report ("text", "yaml", "json", "markdown" or "html")`,
 	)
+	flags.BoolVar(&o.NoColor, "no-color", o.NoColor, "Disable color output")
 }

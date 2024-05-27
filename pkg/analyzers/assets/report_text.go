@@ -7,11 +7,13 @@ import (
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/shopspring/decimal"
+
+	"github.com/yhlooo/dragon-acct/pkg/report"
 )
 
 // Text 输出文本形式的报告
-func (r *Report) Text(w io.Writer) error {
-	r.textAllGoods(w)
+func (r *Report) Text(w io.Writer, opts report.TextOptions) error {
+	r.textAllGoods(w, opts)
 	r.textHoldingGoods(w)
 	r.textRisks(w)
 	r.textCustodians(w)
@@ -21,7 +23,7 @@ func (r *Report) Text(w io.Writer) error {
 }
 
 // textAllGoods 输出文本形式的关于所有产品的报告
-func (r *Report) textAllGoods(w io.Writer) {
+func (r *Report) textAllGoods(w io.Writer, opts report.TextOptions) {
 	table := tablewriter.NewWriter(w)
 	table.SetHeader([]string{"Name", "Custodian", "Code", "Risk", "Price", "Quantity", "Value", "P/L", "RR", "XIRR"})
 	table.SetColumnAlignment([]int{
@@ -40,7 +42,7 @@ func (r *Report) textAllGoods(w io.Writer) {
 		if g.Quantity.IsZero() && !r.showHistory {
 			continue
 		}
-		table.Append([]string{
+		row := []string{
 			g.Name,
 			g.Custodian,
 			g.Code,
@@ -51,7 +53,34 @@ func (r *Report) textAllGoods(w io.Writer) {
 			g.ProfitAndLoss.StringFixedBank(2),
 			g.RateOfReturn.Mul(decimal.New(100, 0)).StringFixedBank(2) + "%",
 			g.AnnualizedRateOfReturn.Mul(decimal.New(100, 0)).StringFixedBank(2) + "%",
-		})
+		}
+
+		if opts.WithColor {
+			colors := make([]tablewriter.Colors, 10)
+
+			if g.Value.IsZero() {
+				for i := range colors {
+					colors[i] = append(colors[i], 2)
+				}
+			}
+			if g.ProfitAndLoss.IsNegative() {
+				colors[7] = append(colors[7], tablewriter.FgRedColor)
+				colors[8] = append(colors[8], tablewriter.FgRedColor)
+				colors[9] = append(colors[9], tablewriter.FgRedColor)
+			} else if g.AnnualizedRateOfReturn.Sub(decimal.New(3, -2)).IsPositive() {
+				colors[7] = append(colors[7], tablewriter.FgGreenColor)
+				colors[8] = append(colors[8], tablewriter.FgGreenColor)
+				colors[9] = append(colors[9], tablewriter.FgGreenColor)
+			}
+			if g.AnnualizedRateOfReturn.Abs().Sub(decimal.New(5, -2)).IsPositive() {
+				colors[7] = append(colors[7], tablewriter.Bold)
+				colors[8] = append(colors[8], tablewriter.Bold)
+				colors[9] = append(colors[9], tablewriter.Bold)
+			}
+			table.Rich(row, colors)
+		} else {
+			table.Append(row)
+		}
 	}
 
 	_, _ = fmt.Fprintln(w, "All Goods:")
