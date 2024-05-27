@@ -3,7 +3,6 @@ package assets
 import (
 	"fmt"
 	"io"
-	"slices"
 	"sort"
 
 	"github.com/olekukonko/tablewriter"
@@ -79,8 +78,10 @@ func (r *Report) textHoldingGoods(w io.Writer) {
 			g.Value.StringFixedBank(2),
 			g.Ratio.Shift(2).StringFixedBank(2) + "%",
 		})
-		total = total.Add(g.Value)
-		totalRatio = totalRatio.Add(g.Ratio)
+		if !g.Base || g.Value.IsPositive() {
+			total = total.Add(g.Value)
+			totalRatio = totalRatio.Add(g.Ratio)
+		}
 	}
 	table.SetFooter([]string{"", "Total", total.StringFixedBank(2), totalRatio.Shift(2).StringFixedBank(2) + "%"})
 
@@ -113,21 +114,23 @@ func (r *Report) textRisks(w io.Writer) {
 
 // textCustodians 输出文本形式的关于托管机构分布的报告
 func (r *Report) textCustodians(w io.Writer) {
-	// 关键商品
-	var pinned []string
+	// 基础商品
+	var baseGoods []string
 	for _, info := range r.goodsInfos {
 		if !info.Base {
 			continue
 		}
-		pinned = append(pinned, info.Name)
+		baseGoods = append(baseGoods, info.Name)
 	}
+	sort.Strings(baseGoods)
 
 	// 按托管机构分组统计资产总价
 	var custodians []string
+	totalValue := decimal.Zero
 	groupByCustodian := map[string]map[string]decimal.Decimal{}
 	for _, g := range r.HoldingGoods() {
 		name := g.Name
-		if !slices.Contains(pinned, name) {
+		if !g.Base {
 			name = "others"
 		}
 		if groupByCustodian[g.Custodian] == nil {
@@ -135,7 +138,10 @@ func (r *Report) textCustodians(w io.Writer) {
 			custodians = append(custodians, g.Custodian)
 		}
 		groupByCustodian[g.Custodian][name] = groupByCustodian[g.Custodian][name].Add(g.Value)
-		groupByCustodian[g.Custodian]["total"] = groupByCustodian[g.Custodian]["total"].Add(g.Value)
+		if !g.Base || g.Value.IsPositive() {
+			groupByCustodian[g.Custodian]["total"] = groupByCustodian[g.Custodian]["total"].Add(g.Value)
+			totalValue = totalValue.Add(g.Value)
+		}
 	}
 	sort.Slice(custodians, func(i, j int) bool {
 		return groupByCustodian[custodians[j]]["total"].LessThan(groupByCustodian[custodians[i]]["total"])
@@ -149,7 +155,7 @@ func (r *Report) textCustodians(w io.Writer) {
 		goods := groupByCustodian[custodian]
 		line := []string{custodian}
 
-		for _, name := range pinned {
+		for _, name := range baseGoods {
 			line = append(line, goods[name].StringFixedBank(2))
 			if i == 0 {
 				header = append(header, name)
@@ -163,12 +169,17 @@ func (r *Report) textCustodians(w io.Writer) {
 			columnAlignment = append(columnAlignment, tablewriter.ALIGN_RIGHT)
 		}
 
-		if len(pinned) != 0 {
+		if len(baseGoods) != 0 {
 			line = append(line, goods["total"].StringFixedBank(2))
 			if i == 0 {
 				header = append(header, "Total")
 				columnAlignment = append(columnAlignment, tablewriter.ALIGN_RIGHT)
 			}
+		}
+		line = append(line, goods["total"].Div(totalValue).Shift(2).StringFixedBank(2)+"%")
+		if i == 0 {
+			header = append(header, "Ratio")
+			columnAlignment = append(columnAlignment, tablewriter.ALIGN_RIGHT)
 		}
 
 		data = append(data, line)

@@ -51,6 +51,11 @@ type Goods struct {
 	// 年化收益率
 	AnnualizedRateOfReturn decimal.Decimal `json:"annualizedRateOfReturn,omitempty" yaml:"annualizedRateOfReturn,omitempty"`
 
+	// 是否基础商品（货币）
+	Base bool `json:"base,omitempty" yaml:"base,omitempty"`
+	// 是否忽略收益
+	IgnoreReturn bool `json:"ignoreReturn,omitempty" yaml:"ignoreReturn,omitempty"`
+
 	// 关于该产品的交易
 	transactions []v1.Transaction
 }
@@ -81,18 +86,21 @@ func (r *Report) Complete() {
 	for i, g := range r.goods {
 		// 补充产品信息
 		info, ok := r.goodsInfos[g.Name]
-		isBase := false
 		if ok {
 			r.goods[i].Code = info.Code
 			r.goods[i].Price = info.Price
 			r.goods[i].Risk = info.Risk
-			isBase = info.Base
+			r.goods[i].Base = info.Base
+			r.goods[i].IgnoreReturn = info.IgnoreReturn
 		}
 		// 补充总价
 		r.goods[i].Value = g.Quantity.Mul(r.goods[i].Price)
-		totalValue = totalValue.Add(r.goods[i].Value)
+		if !r.goods[i].Base || r.goods[i].Value.IsPositive() {
+			totalValue = totalValue.Add(r.goods[i].Value)
+		}
+
 		// 补充损益情况
-		if !isBase {
+		if !r.goods[i].Base {
 			totalCost, totalReturn, cashFlow := r.parseGoodsProfitAndLoss(&r.goods[i])
 			r.goods[i].ProfitAndLoss = totalReturn.Sub(totalCost)
 			r.goods[i].RateOfReturn = totalReturn.Sub(totalCost).DivRound(totalCost, 6)
@@ -119,7 +127,7 @@ func (r *Report) completeTotalProfitAndLoss() {
 	totalReturn := decimal.Zero
 
 	for _, goods := range r.goods {
-		if r.goodsInfos[goods.Name].IgnoreReturn || r.goodsInfos[goods.Name].Base {
+		if goods.IgnoreReturn || goods.Base {
 			continue
 		}
 		goodsCost, goodsReturn, goodsCashFlow := r.parseGoodsProfitAndLoss(&goods)
@@ -224,6 +232,9 @@ func (r *Report) Risks() []Goods {
 	risks := map[v1.RiskLevel]decimal.Decimal{}
 	totalValue := decimal.Zero
 	for _, g := range r.goods {
+		if g.Base && g.Value.IsNegative() {
+			continue
+		}
 		if g.Value.IsZero() {
 			continue
 		}
