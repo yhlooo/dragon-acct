@@ -17,7 +17,8 @@ func (r *Report) Text(w io.Writer, opts report.TextOptions) error {
 	r.textHoldingGoods(w)
 	r.textRisks(w)
 	r.textCustodians(w)
-	r.testTotalProfitAndLoss(w)
+	r.textCheckpoints(w)
+	r.textTotalProfitAndLoss(w)
 
 	return nil
 }
@@ -223,8 +224,35 @@ func (r *Report) textCustodians(w io.Writer) {
 	_, _ = fmt.Fprintln(w)
 }
 
-// testTotalProfitAndLoss 输出文本形式的关于总体损益情况的报告
-func (r *Report) testTotalProfitAndLoss(w io.Writer) {
+// textCheckpoints 输出文本形式的检查点报告
+func (r *Report) textCheckpoints(w io.Writer) {
+	table := tablewriter.NewWriter(w)
+	table.SetHeader([]string{"Date", "Total", "P/L", "RR", "XIRR"})
+	table.SetColumnAlignment([]int{
+		tablewriter.ALIGN_LEFT,
+		tablewriter.ALIGN_RIGHT,
+		tablewriter.ALIGN_RIGHT,
+		tablewriter.ALIGN_RIGHT,
+		tablewriter.ALIGN_RIGHT,
+	})
+	for _, cp := range r.Checkpoints() {
+		profitAndLoss, rateOfReturn, annualizedRateOfReturn := cp.Report.TotalProfitAndLoss()
+		table.Append([]string{
+			cp.Date.String(),
+			cp.Report.TotalValue().StringFixedBank(2),
+			profitAndLoss.StringFixedBank(2),
+			rateOfReturn.Mul(decimal.New(100, 0)).StringFixedBank(2) + "%",
+			annualizedRateOfReturn.Mul(decimal.New(100, 0)).StringFixedBank(2) + "%",
+		})
+	}
+
+	_, _ = fmt.Fprintln(w, "Checkpoints:")
+	table.Render()
+	_, _ = fmt.Fprintln(w)
+}
+
+// textTotalProfitAndLoss 输出文本形式的关于总体损益情况的报告
+func (r *Report) textTotalProfitAndLoss(w io.Writer) {
 	table := tablewriter.NewWriter(w)
 	table.SetHeader([]string{"P/L", "RR", "XIRR"})
 	table.SetColumnAlignment([]int{

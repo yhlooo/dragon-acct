@@ -18,6 +18,7 @@ const (
 	assetsName         = "assets"
 	assetsGoods        = "assets_goods"
 	assetsTransactions = "assets_transactions"
+	assetsCheckpoints  = "assets_checkpoints"
 	incomeName         = "income"
 	incomeDetailsName  = "income_details"
 )
@@ -49,6 +50,11 @@ func Collect(path string) (*v1.Root, error) {
 			switch ext {
 			case ".yaml", ".yml":
 				err = loadYAML(ret, filePath, &v1.Income{})
+			}
+		case strings.HasPrefix(f.Name(), assetsCheckpoints):
+			switch ext {
+			case ".yaml", ".yml":
+				err = loadYAML(ret, filePath, &[]v1.Checkpoint{})
 			}
 		case strings.HasPrefix(f.Name(), assetsTransactions):
 			switch ext {
@@ -86,7 +92,7 @@ func loadYAML(root *v1.Root, path string, into interface{}) error {
 		return fmt.Errorf("read file %q error: %w", path, err)
 	}
 	// 反序列化
-	if err := yaml.Unmarshal(raw, &into); err != nil {
+	if err := yaml.Unmarshal(raw, into); err != nil {
 		return fmt.Errorf("unmarshal file %q as yaml to %T error: %w", path, into, err)
 	}
 	// 合并数据

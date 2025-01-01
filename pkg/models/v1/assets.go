@@ -10,6 +10,8 @@ type Assets struct {
 	Goods []GoodsInfo `json:"goods,omitempty" yaml:"goods,omitempty"`
 	// 交易记录
 	Transactions []Transaction `json:"transactions,omitempty" yaml:"transactions,omitempty"`
+	// 期中检查点
+	Checkpoints []Checkpoint `json:"checkpoints,omitempty" yaml:"checkpoints,omitempty"`
 }
 
 // Transaction 交易
@@ -64,3 +66,19 @@ const (
 	Risk4 = "R4"
 	Risk5 = "R5"
 )
+
+// Checkpoint 检查点
+type Checkpoint struct {
+	// 日期
+	Date Date `json:"data" yaml:"date"`
+	// 商品信息
+	Goods []CheckpointGoodsInfo `json:"goods,omitempty" yaml:"goods,omitempty"`
+}
+
+// CheckpointGoodsInfo 检查点商品信息
+type CheckpointGoodsInfo struct {
+	// 商品名
+	Name string `json:"name" yaml:"name"`
+	// 单价
+	Price decimal.Decimal `json:"price" yaml:"price"`
+}

@@ -22,10 +22,14 @@ func Merge(root *v1.Root, data interface{}) error {
 		return mergeAssetsGoods(root, *d)
 	case *[]v1.Transaction:
 		return mergeAssetsTransactions(root, *d)
+	case *[]v1.Checkpoint:
+		return mergeAssetsCheckpoints(root, *d)
 	case []v1.GoodsInfo:
 		return mergeAssetsGoods(root, d)
 	case []v1.Transaction:
 		return mergeAssetsTransactions(root, d)
+	case []v1.Checkpoint:
+		return mergeAssetsCheckpoints(root, d)
 	default:
 		return fmt.Errorf("can not merge %T to *v1.Root", data)
 	}
@@ -58,6 +62,9 @@ func mergeAssets(root *v1.Root, data *v1.Assets) error {
 	if err := mergeAssetsTransactions(root, data.Transactions); err != nil {
 		return err
 	}
+	if err := mergeAssetsCheckpoints(root, data.Checkpoints); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -86,6 +93,17 @@ func mergeAssetsTransactions(root *v1.Root, data []v1.Transaction) error {
 	// 排序
 	sort.Slice(root.Assets.Transactions, func(i, j int) bool {
 		return root.Assets.Transactions[i].Date.Before(root.Assets.Transactions[j].Date.Time)
+	})
+	return nil
+}
+
+// mergeAssetsCheckpoints 将 data 合并到 root.Assets.Checkpoints
+func mergeAssetsCheckpoints(root *v1.Root, data []v1.Checkpoint) error {
+	// 追加
+	root.Assets.Checkpoints = append(root.Assets.Checkpoints, data...)
+	// 排序
+	sort.Slice(root.Assets.Checkpoints, func(i, j int) bool {
+		return root.Assets.Checkpoints[i].Date.Before(root.Assets.Checkpoints[j].Date.Time)
 	})
 	return nil
 }

@@ -3,6 +3,8 @@ package assets
 import (
 	"context"
 	"fmt"
+	"sort"
+	"time"
 
 	"github.com/shopspring/decimal"
 
@@ -17,24 +19,79 @@ type Options struct {
 
 // Analyse 分析资产数据
 func Analyse(_ context.Context, assets *v1.Assets, opts Options) (report.Report, error) {
-	// 统计所有产品持仓情况
-	allGoods := map[string]*Goods{}
-	for _, t := range assets.Transactions {
-		addToGoods(allGoods, t.From, true, t)
-		addToGoods(allGoods, t.To, false, t)
-	}
+	sort.Slice(assets.Transactions, func(i, j int) bool {
+		return assets.Transactions[i].Date.Before(assets.Transactions[j].Date.Time)
+	})
 
-	// 组装报告
 	r := &Report{
 		showHistory: opts.ShowHistory,
 	}
 	r.AddGoodsInfo(assets.Goods...)
+
+	// 统计所有产品持仓情况
+	allGoods := map[string]*Goods{}
+	checkpointI := -1
+	var checkpoint *CheckpointReport
+	var checkpointGoods map[string]*Goods
+	for _, t := range assets.Transactions {
+		addToGoods(allGoods, t.From, true, t)
+		addToGoods(allGoods, t.To, false, t)
+
+		if checkpoint == nil || (checkpointI < len(assets.Checkpoints) && t.Date.After(checkpoint.Date.Time)) {
+			// 记录当前检查点
+			if checkpoint != nil {
+				for _, g := range checkpointGoods {
+					checkpoint.Report.goods = append(checkpoint.Report.goods, *g)
+				}
+				r.checkpoints = append(r.checkpoints, *checkpoint)
+			}
+
+			// 换下一个检查点
+			checkpointI++
+			if checkpointI < len(assets.Checkpoints) {
+				checkpoint = &CheckpointReport{
+					Date: assets.Checkpoints[checkpointI].Date,
+				}
+				for _, info := range assets.Checkpoints[checkpointI].Goods {
+					detail, _ := r.GoodsInfo(info.Name)
+					checkpoint.Report.AddGoodsInfo(v1.GoodsInfo{
+						Name:         info.Name,
+						Code:         detail.Code,
+						Risk:         detail.Risk,
+						Price:        info.Price,
+						Base:         detail.Base,
+						IgnoreReturn: detail.IgnoreReturn,
+					})
+				}
+			} else {
+				checkpoint = &CheckpointReport{
+					Date: v1.Date{Time: time.Now()},
+				}
+				checkpoint.Report.AddGoodsInfo(assets.Goods...)
+			}
+			checkpointGoods = map[string]*Goods{}
+		}
+
+		addToGoods(checkpointGoods, t.From, true, t)
+		addToGoods(checkpointGoods, t.To, false, t)
+	}
+	if checkpoint != nil {
+		for _, g := range checkpointGoods {
+			checkpoint.Report.goods = append(checkpoint.Report.goods, *g)
+		}
+		r.checkpoints = append(r.checkpoints, *checkpoint)
+	}
+
+	// 添加产品记录
 	for _, g := range allGoods {
 		r.goods = append(r.goods, *g)
 	}
 
 	// 补充完成
-	r.Complete()
+	err := r.Complete()
+	if err != nil {
+		return nil, fmt.Errorf("complete report error: %w", err)
+	}
 
 	return r, nil
 }
