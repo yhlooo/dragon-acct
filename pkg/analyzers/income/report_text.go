@@ -79,11 +79,6 @@ func (r *Report) textGroupByTags(w io.Writer) {
 	sort.Strings(keys)
 
 	for _, k := range keys {
-		values := make([]string, 0, len(data[k]))
-		for v := range data[k] {
-			values = append(values, v)
-		}
-
 		table := tablewriter.NewWriter(w)
 		table.SetHeader([]string{
 			k,
@@ -99,10 +94,9 @@ func (r *Report) textGroupByTags(w io.Writer) {
 			tablewriter.ALIGN_RIGHT,
 			tablewriter.ALIGN_RIGHT,
 		})
-		for _, v := range values {
-			item := data[k][v]
+		for _, item := range data[k] {
 			table.Append([]string{
-				v,
+				item.TagValue,
 				item.Gross.StringFixedBank(2),
 				item.InsuranceAndHF.StringFixedBank(2),
 				item.Tax.StringFixedBank(2),

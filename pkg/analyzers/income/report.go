@@ -1,6 +1,8 @@
 package income
 
 import (
+	"sort"
+
 	"github.com/shopspring/decimal"
 
 	v1 "github.com/yhlooo/dragon-acct/pkg/models/v1"
@@ -20,6 +22,7 @@ var _ report.Report = &Report{}
 type IncomeItem struct {
 	v1.IncomeItem
 
+	TagValue string
 	// 到手收入
 	TakeHome decimal.Decimal
 	// 用于消费的数量
@@ -35,36 +38,48 @@ func (r *Report) Complete() {
 }
 
 // GroupByTags 返回按标签聚合的收入数据
-func (r *Report) GroupByTags() map[string]map[string]IncomeItem {
-	var ret map[string]map[string]IncomeItem
+func (r *Report) GroupByTags() map[string][]IncomeItem {
+	var tagsMap map[string]map[string]IncomeItem
 
 	for _, item := range r.details {
 		if len(item.Tags) == 0 {
 			// 没有 tag
 			continue
 		}
-		if ret == nil {
-			ret = make(map[string]map[string]IncomeItem)
+		if tagsMap == nil {
+			tagsMap = make(map[string]map[string]IncomeItem)
 		}
 
 		for k, v := range item.Tags {
-			if ret[k] == nil {
-				ret[k] = make(map[string]IncomeItem)
+			if tagsMap[k] == nil {
+				tagsMap[k] = make(map[string]IncomeItem)
 			}
 
-			totalTakeHome := ret[k][v].TakeHome.Add(item.TakeHome)
-			totalConsumption := ret[k][v].Consumption.Add(item.Consumption)
-			ret[k][v] = IncomeItem{
+			totalTakeHome := tagsMap[k][v].TakeHome.Add(item.TakeHome)
+			totalConsumption := tagsMap[k][v].Consumption.Add(item.Consumption)
+			tagsMap[k][v] = IncomeItem{
 				IncomeItem: v1.IncomeItem{
-					Gross:                 ret[k][v].Gross.Add(item.Gross),
-					InsuranceAndHF:        ret[k][v].InsuranceAndHF.Add(item.InsuranceAndHF),
-					Tax:                   ret[k][v].Tax.Add(item.Tax),
+					Gross:                 tagsMap[k][v].Gross.Add(item.Gross),
+					InsuranceAndHF:        tagsMap[k][v].InsuranceAndHF.Add(item.InsuranceAndHF),
+					Tax:                   tagsMap[k][v].Tax.Add(item.Tax),
 					ConsumptionProportion: totalConsumption.Div(totalTakeHome),
 				},
 				TakeHome:    totalTakeHome,
 				Consumption: totalConsumption,
 			}
 		}
+	}
+
+	ret := map[string][]IncomeItem{}
+	for tag, values := range tagsMap {
+		ret[tag] = make([]IncomeItem, 0, len(values))
+		for tagValue, data := range values {
+			data.TagValue = tagValue
+			ret[tag] = append(ret[tag], data)
+		}
+		sort.Slice(ret[tag], func(i, j int) bool {
+			return ret[tag][i].TagValue < ret[tag][j].TagValue
+		})
 	}
 
 	return ret
