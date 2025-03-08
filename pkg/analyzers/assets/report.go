@@ -358,15 +358,16 @@ func (r *CheckpointReport) Complete(lastCheckpoint *CheckpointReport) error {
 	}
 
 	// 添加上一期期末资产结算结果
+	var extraGoods []Goods
 	for _, g := range lastCheckpoint.Report.HoldingGoods() {
 		key := fmt.Sprintf("%s/%s", g.Custodian, g.Name)
 		if _, ok := goodsMap[key]; !ok {
-			r.Report.goods = append(r.Report.goods, Goods{
+			extraGoods = append(extraGoods, Goods{
 				Name:      g.Name,
 				Custodian: g.Custodian,
 				Quantity:  decimal.Zero,
 			})
-			goodsMap[key] = &r.Report.goods[len(r.Report.goods)-1]
+			goodsMap[key] = &extraGoods[len(extraGoods)-1]
 		}
 
 		goodsMap[key].Quantity = goodsMap[key].Quantity.Add(g.Quantity)
@@ -376,6 +377,7 @@ func (r *CheckpointReport) Complete(lastCheckpoint *CheckpointReport) error {
 			To:   &v1.Goods{Name: g.Name, Custodian: g.Custodian, Quantity: g.Quantity},
 		})
 	}
+	r.Report.goods = append(r.Report.goods, extraGoods...)
 
 	// 补全当期报告
 	return r.Report.Complete()
