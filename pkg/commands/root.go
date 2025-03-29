@@ -43,6 +43,7 @@ func NewDragonCommandWithOptions(opts options.Options) *cobra.Command {
 		NewInitCommandWithOptions(&opts.Init),
 		NewValidateCommandWithOptions(&opts.Validate),
 		NewRunCommandWithOptions(&opts.Run),
+		NewImportCommandWithOptions(&opts.Import),
 	)
 
 	return cmd

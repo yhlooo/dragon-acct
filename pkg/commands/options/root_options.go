@@ -7,6 +7,7 @@ func NewDefaultOptions() Options {
 		Init:     NewDefaultInitOptions(),
 		Run:      NewDefaultRunOptions(),
 		Validate: NewDefaultValidateOptions(),
+		Import:   NewDefaultImportOptions(),
 	}
 }
 
@@ -20,4 +21,6 @@ type Options struct {
 	Run RunOptions `json:"run,omitempty" yaml:"run,omitempty"`
 	// validate 命令选项
 	Validate ValidateOptions `json:"validate,omitempty" yaml:"validate"`
+	// import 命令选项
+	Import ImportOptions `json:"import,omitempty" yaml:"import,omitempty"`
 }
